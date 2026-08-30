@@ -4,7 +4,15 @@ on:
   push:
     branches:
       - main
+    paths:
+      - "envs/**"
+      - "modules/**"
+      - ".github/workflows/terraform-apply.yml"
   workflow_dispatch:
+
+concurrency:
+  group: terraform-prod
+  cancel-in-progress: false
 
 permissions:
   id-token: write
@@ -64,34 +72,28 @@ jobs:
             -backend-config="container_name=${{ secrets.TF_STATE_CONTAINER }}" \
             -backend-config="subscription_id=${{ secrets.AZURE_SUBSCRIPTION_ID }}"
 
-      - name: Break stale Terraform state lock
-        working-directory: ${{ env.TF_WORKING_DIR }}
-        run: |
-          echo "Breaking any blob lease on prod.tfstate (no-op if none)"
-          az storage blob lease break \
-            --account-name "${{ secrets.TF_STATE_STORAGE_ACCOUNT }}" \
-            --container-name "${{ secrets.TF_STATE_CONTAINER }}" \
-            --blob-name "prod.tfstate" \
-            --auth-mode login 2>/dev/null || true
-
       - name: Reconcile orphaned Container App
+        if: github.event_name == 'workflow_dispatch'
         working-directory: ${{ env.TF_WORKING_DIR }}
+        env:
+          CONTAINER_APP_NAME: ${{ vars.CONTAINER_APP_NAME || 'exit-app' }}
+          RESOURCE_GROUP: ${{ vars.RESOURCE_GROUP || 'exit-prod' }}
         run: |
           if terraform state show 'module.container_app.azurerm_container_app.this' >/dev/null 2>&1; then
             echo "Container App already in Terraform state"
             exit 0
           fi
-          if ! az containerapp show --name exit-app --resource-group exit-prod >/dev/null 2>&1; then
+          if ! az containerapp show --name "${CONTAINER_APP_NAME}" --resource-group "${RESOURCE_GROUP}" >/dev/null 2>&1; then
             echo "No orphan Container App in Azure"
             exit 0
           fi
-          PROV=$(az containerapp show --name exit-app --resource-group exit-prod --query properties.provisioningState -o tsv)
+          PROV=$(az containerapp show --name "${CONTAINER_APP_NAME}" --resource-group "${RESOURCE_GROUP}" --query properties.provisioningState -o tsv)
           if [ "$PROV" = "Failed" ]; then
             echo "Deleting failed orphan Container App so Terraform can recreate it"
-            az containerapp delete --name exit-app --resource-group exit-prod --yes
+            az containerapp delete --name "${CONTAINER_APP_NAME}" --resource-group "${RESOURCE_GROUP}" --yes
             exit 0
           fi
-          APP_ID="/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/exit-prod/providers/Microsoft.App/containerApps/exit-app"
+          APP_ID="/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${RESOURCE_GROUP}/providers/Microsoft.App/containerApps/${CONTAINER_APP_NAME}"
           echo "Importing existing Container App into Terraform state"
           terraform import 'module.container_app.azurerm_container_app.this' "$APP_ID"
 
@@ -104,7 +106,6 @@ jobs:
           TF_VAR_shopify_app_url: ${{ vars.SHOPIFY_APP_URL }}
         run: |
           terraform apply -auto-approve
-          # Container Apps need Key Vault/Acr role assignments before secret refs work.
           terraform apply -auto-approve
 
       - name: Export outputs

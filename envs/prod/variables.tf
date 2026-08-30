@@ -42,7 +42,7 @@ variable "container_image" {
 
 variable "scopes" {
   type    = string
-  default = "read_orders,read_customers,write_orders"
+  default = "read_orders,read_customers"
 }
 
 variable "tags" {
