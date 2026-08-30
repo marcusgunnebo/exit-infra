@@ -47,6 +47,21 @@ else
   echo "Contributor role assignment already exists."
 fi
 
+if ! az role assignment list \
+  --assignee "${APP_ID}" \
+  --scope "/subscriptions/${SUBSCRIPTION_ID}" \
+  --role "User Access Administrator" \
+  --query "[0].id" -o tsv | grep -q .; then
+  az role assignment create \
+    --assignee "${APP_ID}" \
+    --role "User Access Administrator" \
+    --scope "/subscriptions/${SUBSCRIPTION_ID}" \
+    -o none
+  echo "Assigned User Access Administrator on subscription."
+else
+  echo "User Access Administrator role assignment already exists."
+fi
+
 ensure_federated_credential() {
   local NAME="$1"
   local SUBJECT="$2"
