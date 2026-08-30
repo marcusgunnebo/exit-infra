@@ -16,6 +16,6 @@ output "admin_password" {
 }
 
 output "database_url" {
-  value     = "postgresql://${azurerm_postgresql_flexible_server.this.administrator_login}:${random_password.admin.result}@${azurerm_postgresql_flexible_server.this.fqdn}:5432/${azurerm_postgresql_flexible_server_database.this.name}?sslmode=require"
+  value     = "postgresql://${azurerm_postgresql_flexible_server.this.administrator_login}:${urlencode(random_password.admin.result)}@${azurerm_postgresql_flexible_server.this.fqdn}:5432/${azurerm_postgresql_flexible_server_database.this.name}?sslmode=require"
   sensitive = true
 }
