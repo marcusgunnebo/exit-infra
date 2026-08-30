@@ -12,6 +12,15 @@ CONTAINER="${TFSTATE_CONTAINER:-tfstate}"
 echo "Using subscription: ${SUBSCRIPTION}"
 az account set --subscription "${SUBSCRIPTION}"
 
+echo "Registering required resource providers (new subscriptions need this)..."
+for PROVIDER in Microsoft.Storage Microsoft.Network Microsoft.KeyVault Microsoft.DBforPostgreSQL Microsoft.App Microsoft.ContainerRegistry Microsoft.OperationalInsights Microsoft.Insights; do
+  STATE="$(az provider show -n "${PROVIDER}" --query registrationState -o tsv 2>/dev/null || echo Unknown)"
+  if [ "${STATE}" != "Registered" ]; then
+    echo "  Registering ${PROVIDER}..."
+    az provider register -n "${PROVIDER}" --wait -o none
+  fi
+done
+
 az group create -n "${RG}" -l "${LOCATION}" -o none
 
 az storage account create \
