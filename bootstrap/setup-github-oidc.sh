@@ -8,7 +8,7 @@ GITHUB_ACTOR_ID="${GITHUB_ACTOR_ID:?Set GITHUB_ACTOR_ID (GitHub user id, e.g. 63
 INFRA_REPO="${INFRA_REPO:-exit-infra}"
 APP_REPO="${APP_REPO:-exit-app}"
 INFRA_REPO_ID="${INFRA_REPO_ID:?Set INFRA_REPO_ID (GitHub repo id for exit-infra)}"
-APP_REPO_ID="${APP_REPO_ID:-}"
+APP_REPO_ID="${APP_REPO_ID:-1351494487}"
 SUBSCRIPTION="${AZURE_SUBSCRIPTION_NAME:-Exit}"
 APP_NAME="${OIDC_APP_NAME:-github-exit}"
 
@@ -89,9 +89,6 @@ ensure_federated_credential "${INFRA_REPO}-pr" "repo:${GITHUB_ORG}@${GITHUB_ACTO
 if [ -n "${APP_REPO_ID}" ]; then
   ensure_federated_credential "${APP_REPO}-main" "repo:${GITHUB_ORG}@${GITHUB_ACTOR_ID}/${APP_REPO}@${APP_REPO_ID}:ref:refs/heads/main"
   ensure_federated_credential "${APP_REPO}-pr" "repo:${GITHUB_ORG}@${GITHUB_ACTOR_ID}/${APP_REPO}@${APP_REPO_ID}:pull_request"
-else
-  ensure_federated_credential "${APP_REPO}-main" "repo:${GITHUB_ORG}@${GITHUB_ACTOR_ID}/${APP_REPO}:ref:refs/heads/main"
-  ensure_federated_credential "${APP_REPO}-pr" "repo:${GITHUB_ORG}@${GITHUB_ACTOR_ID}/${APP_REPO}:pull_request"
 fi
 
 # Legacy subject format (older GitHub OIDC tokens)
