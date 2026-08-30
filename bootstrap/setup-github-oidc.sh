@@ -4,8 +4,11 @@
 set -euo pipefail
 
 GITHUB_ORG="${GITHUB_ORG:?Set GITHUB_ORG (e.g. marcusgunnebo)}"
+GITHUB_ACTOR_ID="${GITHUB_ACTOR_ID:?Set GITHUB_ACTOR_ID (GitHub user id, e.g. 63792058)}"
 INFRA_REPO="${INFRA_REPO:-exit-infra}"
 APP_REPO="${APP_REPO:-exit-app}"
+INFRA_REPO_ID="${INFRA_REPO_ID:?Set INFRA_REPO_ID (GitHub repo id for exit-infra)}"
+APP_REPO_ID="${APP_REPO_ID:-}"
 SUBSCRIPTION="${AZURE_SUBSCRIPTION_NAME:-Exit}"
 APP_NAME="${OIDC_APP_NAME:-github-exit}"
 
@@ -49,9 +52,9 @@ ensure_federated_credential() {
   local SUBJECT="$2"
   local EXISTS
   EXISTS="$(az ad app federated-credential list --id "${APP_ID}" \
-    --query "[?name=='${NAME}'].name | [0]" -o tsv)"
+    --query "[?subject=='${SUBJECT}'].name | [0]" -o tsv)"
   if [ -n "${EXISTS}" ] && [ "${EXISTS}" != "null" ]; then
-    echo "Federated credential already exists: ${NAME}"
+    echo "Federated credential already exists: ${SUBJECT}"
     return
   fi
   az ad app federated-credential create \
@@ -62,12 +65,24 @@ ensure_federated_credential() {
       \"subject\": \"${SUBJECT}\",
       \"audiences\": [\"api://AzureADTokenExchange\"]
     }" -o none
-  echo "Created federated credential: ${NAME}"
+  echo "Created federated credential: ${SUBJECT}"
 }
 
+ensure_federated_credential "${INFRA_REPO}-main" "repo:${GITHUB_ORG}@${GITHUB_ACTOR_ID}/${INFRA_REPO}@${INFRA_REPO_ID}:ref:refs/heads/main"
+ensure_federated_credential "${INFRA_REPO}-pr" "repo:${GITHUB_ORG}@${GITHUB_ACTOR_ID}/${INFRA_REPO}@${INFRA_REPO_ID}:pull_request"
+
+if [ -n "${APP_REPO_ID}" ]; then
+  ensure_federated_credential "${APP_REPO}-main" "repo:${GITHUB_ORG}@${GITHUB_ACTOR_ID}/${APP_REPO}@${APP_REPO_ID}:ref:refs/heads/main"
+  ensure_federated_credential "${APP_REPO}-pr" "repo:${GITHUB_ORG}@${GITHUB_ACTOR_ID}/${APP_REPO}@${APP_REPO_ID}:pull_request"
+else
+  ensure_federated_credential "${APP_REPO}-main" "repo:${GITHUB_ORG}@${GITHUB_ACTOR_ID}/${APP_REPO}:ref:refs/heads/main"
+  ensure_federated_credential "${APP_REPO}-pr" "repo:${GITHUB_ORG}@${GITHUB_ACTOR_ID}/${APP_REPO}:pull_request"
+fi
+
+# Legacy subject format (older GitHub OIDC tokens)
 for REPO in "${INFRA_REPO}" "${APP_REPO}"; do
-  ensure_federated_credential "${REPO}-main" "repo:${GITHUB_ORG}/${REPO}:ref:refs/heads/main"
-  ensure_federated_credential "${REPO}-pr" "repo:${GITHUB_ORG}/${REPO}:pull_request"
+  ensure_federated_credential "${REPO}-legacy-main" "repo:${GITHUB_ORG}/${REPO}:ref:refs/heads/main"
+  ensure_federated_credential "${REPO}-legacy-pr" "repo:${GITHUB_ORG}/${REPO}:pull_request"
 done
 
 echo ""
