@@ -64,16 +64,26 @@ jobs:
             -backend-config="container_name=${{ secrets.TF_STATE_CONTAINER }}" \
             -backend-config="subscription_id=${{ secrets.AZURE_SUBSCRIPTION_ID }}"
 
-      - name: Import orphaned Container App (if needed)
+      - name: Reconcile orphaned Container App
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: |
-          APP_ID="/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/exit-prod/providers/Microsoft.App/containerApps/exit-app"
-          if ! terraform state show 'module.container_app.azurerm_container_app.this' >/dev/null 2>&1; then
-            if az containerapp show --name exit-app --resource-group exit-prod >/dev/null 2>&1; then
-              echo "Importing existing Container App into Terraform state"
-              terraform import 'module.container_app.azurerm_container_app.this' "$APP_ID"
-            fi
+          if terraform state show 'module.container_app.azurerm_container_app.this' >/dev/null 2>&1; then
+            echo "Container App already in Terraform state"
+            exit 0
           fi
+          if ! az containerapp show --name exit-app --resource-group exit-prod >/dev/null 2>&1; then
+            echo "No orphan Container App in Azure"
+            exit 0
+          fi
+          PROV=$(az containerapp show --name exit-app --resource-group exit-prod --query properties.provisioningState -o tsv)
+          if [ "$PROV" = "Failed" ]; then
+            echo "Deleting failed orphan Container App so Terraform can recreate it"
+            az containerapp delete --name exit-app --resource-group exit-prod --yes
+            exit 0
+          fi
+          APP_ID="/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/exit-prod/providers/Microsoft.App/containerApps/exit-app"
+          echo "Importing existing Container App into Terraform state"
+          terraform import 'module.container_app.azurerm_container_app.this' "$APP_ID"
 
       - name: Terraform Apply
         working-directory: ${{ env.TF_WORKING_DIR }}

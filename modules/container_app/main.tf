@@ -1,3 +1,22 @@
+resource "azurerm_user_assigned_identity" "aca" {
+  name                = "${var.name_prefix}-aca-id"
+  location            = var.location
+  resource_group_name = var.resource_group_name
+  tags                = var.tags
+}
+
+resource "azurerm_role_assignment" "acr_pull" {
+  scope                = var.acr_id
+  role_definition_name = "AcrPull"
+  principal_id         = azurerm_user_assigned_identity.aca.principal_id
+}
+
+resource "azurerm_role_assignment" "keyvault_secrets_user" {
+  scope                = var.key_vault_id
+  role_definition_name = "Key Vault Secrets User"
+  principal_id         = azurerm_user_assigned_identity.aca.principal_id
+}
+
 resource "azurerm_container_app_environment" "this" {
   name                       = "${var.name_prefix}-cae"
   location                   = var.location
@@ -18,43 +37,49 @@ resource "azurerm_container_app" "this" {
   revision_mode                = "Single"
   tags                         = var.tags
 
+  depends_on = [
+    azurerm_role_assignment.acr_pull,
+    azurerm_role_assignment.keyvault_secrets_user,
+  ]
+
   identity {
-    type = "SystemAssigned"
+    type         = "UserAssigned"
+    identity_ids = [azurerm_user_assigned_identity.aca.id]
   }
 
   secret {
     name                = "database-url"
     key_vault_secret_id = var.key_vault_secret_ids.database_url
-    identity            = "System"
+    identity            = azurerm_user_assigned_identity.aca.id
   }
 
   secret {
     name                = "shopify-api-key"
     key_vault_secret_id = var.key_vault_secret_ids.shopify_api_key
-    identity            = "System"
+    identity            = azurerm_user_assigned_identity.aca.id
   }
 
   secret {
     name                = "shopify-api-secret"
     key_vault_secret_id = var.key_vault_secret_ids.shopify_api_secret
-    identity            = "System"
+    identity            = azurerm_user_assigned_identity.aca.id
   }
 
   secret {
     name                = "scopes"
     key_vault_secret_id = var.key_vault_secret_ids.scopes
-    identity            = "System"
+    identity            = azurerm_user_assigned_identity.aca.id
   }
 
   secret {
     name                = "shopify-app-url"
     key_vault_secret_id = var.key_vault_secret_ids.shopify_app_url
-    identity            = "System"
+    identity            = azurerm_user_assigned_identity.aca.id
   }
 
   registry {
     server   = var.acr_login_server
-    identity = "System"
+    identity = azurerm_user_assigned_identity.aca.id
   }
 
   ingress {
@@ -120,16 +145,4 @@ resource "azurerm_container_app" "this" {
     create = "45m"
     update = "45m"
   }
-}
-
-resource "azurerm_role_assignment" "acr_pull" {
-  scope                = var.acr_id
-  role_definition_name = "AcrPull"
-  principal_id         = azurerm_container_app.this.identity[0].principal_id
-}
-
-resource "azurerm_role_assignment" "keyvault_secrets_user" {
-  scope                = var.key_vault_id
-  role_definition_name = "Key Vault Secrets User"
-  principal_id         = azurerm_container_app.this.identity[0].principal_id
 }
