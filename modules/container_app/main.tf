@@ -5,6 +5,10 @@ resource "azurerm_container_app_environment" "this" {
   log_analytics_workspace_id = var.log_analytics_workspace_id
   infrastructure_subnet_id   = var.infrastructure_subnet_id
   tags                       = var.tags
+
+  lifecycle {
+    ignore_changes = [workload_profile]
+  }
 }
 
 resource "azurerm_container_app" "this" {
