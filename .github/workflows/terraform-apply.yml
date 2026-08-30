@@ -71,7 +71,10 @@ jobs:
           TF_VAR_shopify_api_key: ${{ secrets.SHOPIFY_API_KEY }}
           TF_VAR_shopify_api_secret: ${{ secrets.SHOPIFY_API_SECRET }}
           TF_VAR_shopify_app_url: ${{ vars.SHOPIFY_APP_URL }}
-        run: terraform apply -auto-approve
+        run: |
+          terraform apply -auto-approve
+          # Container Apps need Key Vault/Acr role assignments before secret refs work.
+          terraform apply -auto-approve
 
       - name: Export outputs
         id: tf

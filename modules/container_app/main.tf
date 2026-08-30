@@ -111,6 +111,11 @@ resource "azurerm_container_app" "this" {
       template[0].container[0].image,
     ]
   }
+
+  timeouts {
+    create = "45m"
+    update = "45m"
+  }
 }
 
 resource "azurerm_role_assignment" "acr_pull" {
