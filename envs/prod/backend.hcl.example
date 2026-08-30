@@ -1,0 +1,4 @@
+resource_group_name  = "exit-tfstate"
+storage_account_name = "exittfst001"
+container_name       = "tfstate"
+subscription_id      = "<exit-subscription-id>"

@@ -1,0 +1,87 @@
+name: Terraform Apply
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "envs/**"
+      - "modules/**"
+      - ".github/workflows/terraform-apply.yml"
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  TF_WORKING_DIR: envs/prod
+  APP_REPO: marcusgunnebo/exit-app
+  ARM_USE_OIDC: true
+  ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+  ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+  ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.16.0
+
+      - name: Terraform Init
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          terraform init \
+            -backend-config="resource_group_name=${{ secrets.TF_STATE_RESOURCE_GROUP }}" \
+            -backend-config="storage_account_name=${{ secrets.TF_STATE_STORAGE_ACCOUNT }}" \
+            -backend-config="container_name=${{ secrets.TF_STATE_CONTAINER }}" \
+            -backend-config="subscription_id=${{ secrets.AZURE_SUBSCRIPTION_ID }}"
+
+      - name: Terraform Apply
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        env:
+          TF_VAR_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          TF_VAR_shopify_api_key: ${{ secrets.SHOPIFY_API_KEY }}
+          TF_VAR_shopify_api_secret: ${{ secrets.SHOPIFY_API_SECRET }}
+          TF_VAR_shopify_app_url: ${{ vars.SHOPIFY_APP_URL }}
+        run: terraform apply -auto-approve
+
+      - name: Export outputs
+        id: tf
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          echo "app_url=$(terraform output -raw container_app_url)" >> "$GITHUB_OUTPUT"
+          echo "acr_login_server=$(terraform output -raw acr_login_server)" >> "$GITHUB_OUTPUT"
+          echo "acr_name=$(terraform output -raw acr_name)" >> "$GITHUB_OUTPUT"
+          echo "container_app_name=$(terraform output -raw container_app_name)" >> "$GITHUB_OUTPUT"
+          echo "resource_group=$(terraform output -raw resource_group_name)" >> "$GITHUB_OUTPUT"
+
+      - name: Sync deployment variables to exit-app
+        env:
+          GH_TOKEN: ${{ secrets.APP_REPO_TOKEN }}
+        run: |
+          if [ -z "${GH_TOKEN}" ]; then
+            echo "APP_REPO_TOKEN not set — skip syncing variables to exit-app"
+            exit 0
+          fi
+          gh variable set SHOPIFY_APP_URL --repo "${{ env.APP_REPO }}" --body "${{ steps.tf.outputs.app_url }}"
+          gh variable set ACR_LOGIN_SERVER --repo "${{ env.APP_REPO }}" --body "${{ steps.tf.outputs.acr_login_server }}"
+          gh variable set ACR_NAME --repo "${{ env.APP_REPO }}" --body "${{ steps.tf.outputs.acr_name }}"
+          gh variable set CONTAINER_APP_NAME --repo "${{ env.APP_REPO }}" --body "${{ steps.tf.outputs.container_app_name }}"
+          gh variable set RESOURCE_GROUP --repo "${{ env.APP_REPO }}" --body "${{ steps.tf.outputs.resource_group }}"
+
+      - name: Summary
+        run: |
+          echo "Container App URL: ${{ steps.tf.outputs.app_url }}"
+          echo "ACR: ${{ steps.tf.outputs.acr_login_server }}"
+          echo "Synced outputs to ${{ env.APP_REPO }} (requires APP_REPO_TOKEN secret)"

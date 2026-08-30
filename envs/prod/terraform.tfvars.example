@@ -1,0 +1,5 @@
+subscription_id    = "<exit-subscription-id>"
+location           = "swedencentral"
+name_prefix        = "exit"
+shopify_api_key    = "replace-me"
+shopify_api_secret = "replace-me"

@@ -1,0 +1,58 @@
+name: Terraform Plan
+
+on:
+  pull_request:
+    paths:
+      - "envs/**"
+      - "modules/**"
+      - ".github/workflows/terraform-plan.yml"
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+env:
+  TF_WORKING_DIR: envs/prod
+  ARM_USE_OIDC: true
+  ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+  ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+  ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.16.0
+
+      - name: Terraform Init
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: |
+          terraform init \
+            -backend-config="resource_group_name=${{ secrets.TF_STATE_RESOURCE_GROUP }}" \
+            -backend-config="storage_account_name=${{ secrets.TF_STATE_STORAGE_ACCOUNT }}" \
+            -backend-config="container_name=${{ secrets.TF_STATE_CONTAINER }}" \
+            -backend-config="subscription_id=${{ secrets.AZURE_SUBSCRIPTION_ID }}"
+
+      - name: Terraform Plan
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        env:
+          TF_VAR_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          TF_VAR_shopify_api_key: ${{ secrets.SHOPIFY_API_KEY }}
+          TF_VAR_shopify_api_secret: ${{ secrets.SHOPIFY_API_SECRET }}
+          TF_VAR_shopify_app_url: ${{ vars.SHOPIFY_APP_URL }}
+        run: terraform plan -no-color -out=tfplan
+
+      - name: Show Plan
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform show -no-color tfplan
