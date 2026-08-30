@@ -28,7 +28,7 @@ Optional variable: `SHOPIFY_APP_URL` (set after first deploy)
 | `AZURE_TENANT_ID` | `87536f2f-6c88-4826-a255-45b1824fb020` |
 | `AZURE_SUBSCRIPTION_ID` | `f7e1085c-11c9-4bee-9710-b9eb32b4b51c` |
 | `SHOPIFY_API_KEY` | From Partner Dashboard |
-| `SHOPIFY_CLI_PARTNERS_TOKEN` | For `shopify app deploy` |
+| `SHOPIFY_APP_AUTOMATION_TOKEN` | Dev Dashboard → Exit app → Settings → App Automation Token |
 
 ### Variables (set by infra apply or manually)
 
