@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Create Entra app registration + federated credentials for GitHub Actions OIDC.
-# Registers both exit-infra and exit-app repos on a single app registration.
+# Safe to re-run: reuses existing app, service principal, roles, and credentials.
 set -euo pipefail
 
 GITHUB_ORG="${GITHUB_ORG:?Set GITHUB_ORG (e.g. marcusgunnebo)}"
@@ -13,37 +13,65 @@ az account set --subscription "${SUBSCRIPTION}"
 SUBSCRIPTION_ID="$(az account show --query id -o tsv)"
 TENANT_ID="$(az account show --query tenantId -o tsv)"
 
-APP_ID="$(az ad app create --display-name "${APP_NAME}" --query appId -o tsv)"
-az ad sp create --id "${APP_ID}" --query id -o tsv >/dev/null
+EXISTING_APP_ID="$(az ad app list --display-name "${APP_NAME}" --query "[0].appId" -o tsv)"
+if [ -n "${EXISTING_APP_ID}" ] && [ "${EXISTING_APP_ID}" != "null" ]; then
+  APP_ID="${EXISTING_APP_ID}"
+  echo "Using existing app registration: ${APP_NAME} (${APP_ID})"
+else
+  APP_ID="$(az ad app create --display-name "${APP_NAME}" --query appId -o tsv)"
+  echo "Created app registration: ${APP_NAME} (${APP_ID})"
+fi
 
-az role assignment create \
+if ! az ad sp show --id "${APP_ID}" >/dev/null 2>&1; then
+  az ad sp create --id "${APP_ID}" --query id -o tsv >/dev/null
+  echo "Created service principal."
+else
+  echo "Service principal already exists."
+fi
+
+if ! az role assignment list \
   --assignee "${APP_ID}" \
-  --role Contributor \
   --scope "/subscriptions/${SUBSCRIPTION_ID}" \
-  -o none
+  --role Contributor \
+  --query "[0].id" -o tsv | grep -q .; then
+  az role assignment create \
+    --assignee "${APP_ID}" \
+    --role Contributor \
+    --scope "/subscriptions/${SUBSCRIPTION_ID}" \
+    -o none
+  echo "Assigned Contributor on subscription."
+else
+  echo "Contributor role assignment already exists."
+fi
+
+ensure_federated_credential() {
+  local NAME="$1"
+  local SUBJECT="$2"
+  local EXISTS
+  EXISTS="$(az ad app federated-credential list --id "${APP_ID}" \
+    --query "[?name=='${NAME}'].name | [0]" -o tsv)"
+  if [ -n "${EXISTS}" ] && [ "${EXISTS}" != "null" ]; then
+    echo "Federated credential already exists: ${NAME}"
+    return
+  fi
+  az ad app federated-credential create \
+    --id "${APP_ID}" \
+    --parameters "{
+      \"name\": \"${NAME}\",
+      \"issuer\": \"https://token.actions.githubusercontent.com\",
+      \"subject\": \"${SUBJECT}\",
+      \"audiences\": [\"api://AzureADTokenExchange\"]
+    }" -o none
+  echo "Created federated credential: ${NAME}"
+}
 
 for REPO in "${INFRA_REPO}" "${APP_REPO}"; do
-  az ad app federated-credential create \
-    --id "${APP_ID}" \
-    --parameters "{
-      \"name\": \"${REPO}-main\",
-      \"issuer\": \"https://token.actions.githubusercontent.com\",
-      \"subject\": \"repo:${GITHUB_ORG}/${REPO}:ref:refs/heads/main\",
-      \"audiences\": [\"api://AzureADTokenExchange\"]
-    }" -o none
-
-  az ad app federated-credential create \
-    --id "${APP_ID}" \
-    --parameters "{
-      \"name\": \"${REPO}-pr\",
-      \"issuer\": \"https://token.actions.githubusercontent.com\",
-      \"subject\": \"repo:${GITHUB_ORG}/${REPO}:pull_request\",
-      \"audiences\": [\"api://AzureADTokenExchange\"]
-    }" -o none
+  ensure_federated_credential "${REPO}-main" "repo:${GITHUB_ORG}/${REPO}:ref:refs/heads/main"
+  ensure_federated_credential "${REPO}-pr" "repo:${GITHUB_ORG}/${REPO}:pull_request"
 done
 
 echo ""
-echo "GitHub OIDC app created in subscription: ${SUBSCRIPTION}"
+echo "GitHub OIDC ready in subscription: ${SUBSCRIPTION}"
 echo "Add these secrets to BOTH exit-infra and exit-app GitHub repos:"
 echo "  AZURE_CLIENT_ID=${APP_ID}"
 echo "  AZURE_TENANT_ID=${TENANT_ID}"
