@@ -1,3 +1,5 @@
+# Trigger CI by editing this file when you need a manual redeploy.
+# Last triggered: 2026-08-30
 subscription_id    = "<exit-subscription-id>"
 location           = "swedencentral"
 name_prefix        = "exit"
