@@ -67,13 +67,12 @@ jobs:
       - name: Break stale Terraform state lock
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: |
-          echo "Breaking any blob lease on prod.tfstate"
+          echo "Breaking any blob lease on prod.tfstate (no-op if none)"
           az storage blob lease break \
             --account-name "${{ secrets.TF_STATE_STORAGE_ACCOUNT }}" \
             --container-name "${{ secrets.TF_STATE_CONTAINER }}" \
             --blob-name "prod.tfstate" \
-            --auth-mode login || true
-          terraform force-unlock -force 60c0b435-58a2-6207-5578-e2b9e27ad134 || true
+            --auth-mode login 2>/dev/null || true
 
       - name: Reconcile orphaned Container App
         working-directory: ${{ env.TF_WORKING_DIR }}
