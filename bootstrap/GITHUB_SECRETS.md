@@ -16,6 +16,7 @@ Do not commit real tenant, subscription, or client IDs. Store values in GitHub
 | `SHOPIFY_API_KEY` | Partner Dashboard client ID |
 | `SHOPIFY_API_SECRET` | Partner Dashboard client secret |
 | `APP_REPO_TOKEN` | Optional — fine-scoped PAT to sync variables to exit-app |
+| `CI_RUNNER_SSH_PUBLIC_KEY` | SSH public key for the Terraform CI runner VM (`ssh-ed25519 …`) |
 
 Optional variable: `SHOPIFY_APP_URL` (set after first deploy)
 

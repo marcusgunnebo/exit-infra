@@ -30,6 +30,10 @@ case "${ACTION}" in
     "${BASH_SOURCE%/*}/terraform-runner-vm.sh" wait
     ;;
   stop)
+    if ! az vm show --resource-group "${RESOURCE_GROUP}" --name "${VM_NAME}" >/dev/null 2>&1; then
+      echo "Runner VM not found (${VM_NAME}); nothing to stop"
+      exit 0
+    fi
     STATE="$(power_state)"
     if [ "${STATE}" = "PowerState/deallocated" ] || [ "${STATE}" = "PowerState/stopped" ]; then
       echo "Runner VM already stopped (${VM_NAME})"

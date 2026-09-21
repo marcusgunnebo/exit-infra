@@ -33,6 +33,9 @@ env:
 jobs:
   start-runner:
     runs-on: ubuntu-latest
+    outputs:
+      runs_on: ${{ steps.runner.outputs.runs_on }}
+      use_self_hosted: ${{ steps.runner.outputs.use_self_hosted }}
     permissions:
       id-token: write
       contents: read
@@ -46,14 +49,24 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Start Terraform runner VM
+      - name: Prepare Terraform runner host
+        id: runner
         env:
           GH_TOKEN: ${{ github.token }}
-        run: bash .github/scripts/terraform-runner-vm.sh start
+        run: |
+          if az vm show --resource-group "${RESOURCE_GROUP}" --name "${TF_RUNNER_VM_NAME}" >/dev/null 2>&1; then
+            echo "use_self_hosted=true" >> "$GITHUB_OUTPUT"
+            echo 'runs_on=["self-hosted","exit-terraform"]' >> "$GITHUB_OUTPUT"
+            bash .github/scripts/terraform-runner-vm.sh start
+          else
+            echo "Runner VM not found — bootstrap apply on GitHub-hosted (Key Vault public access must stay enabled)."
+            echo "use_self_hosted=false" >> "$GITHUB_OUTPUT"
+            echo 'runs_on=["ubuntu-latest"]' >> "$GITHUB_OUTPUT"
+          fi
 
   apply:
     needs: start-runner
-    runs-on: [self-hosted, exit-terraform]
+    runs-on: ${{ fromJSON(needs.start-runner.outputs.runs_on) }}
     permissions:
       id-token: write
       contents: read
@@ -62,7 +75,7 @@ jobs:
 
       - name: Validate Azure secrets are configured
         run: |
-          for VAR in AZURE_CLIENT_ID AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID TF_STATE_RESOURCE_GROUP TF_STATE_STORAGE_ACCOUNT TF_STATE_CONTAINER SHOPIFY_API_KEY SHOPIFY_API_SECRET; do
+          for VAR in AZURE_CLIENT_ID AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID TF_STATE_RESOURCE_GROUP TF_STATE_STORAGE_ACCOUNT TF_STATE_CONTAINER SHOPIFY_API_KEY SHOPIFY_API_SECRET CI_RUNNER_SSH_PUBLIC_KEY; do
             if [ -z "${!VAR:-}" ]; then
               echo "::error::Missing secret: ${VAR}"
               exit 1
@@ -77,6 +90,7 @@ jobs:
           TF_STATE_CONTAINER: ${{ secrets.TF_STATE_CONTAINER }}
           SHOPIFY_API_KEY: ${{ secrets.SHOPIFY_API_KEY }}
           SHOPIFY_API_SECRET: ${{ secrets.SHOPIFY_API_SECRET }}
+          CI_RUNNER_SSH_PUBLIC_KEY: ${{ secrets.CI_RUNNER_SSH_PUBLIC_KEY }}
 
       - uses: azure/login@v2
         with:
@@ -129,6 +143,7 @@ jobs:
           TF_VAR_shopify_api_key: ${{ secrets.SHOPIFY_API_KEY }}
           TF_VAR_shopify_api_secret: ${{ secrets.SHOPIFY_API_SECRET }}
           TF_VAR_shopify_app_url: ${{ vars.SHOPIFY_APP_URL }}
+          TF_VAR_ci_runner_ssh_public_key: ${{ secrets.CI_RUNNER_SSH_PUBLIC_KEY }}
         run: |
           terraform apply -auto-approve
           terraform apply -auto-approve
@@ -167,7 +182,7 @@ jobs:
     needs:
       - start-runner
       - apply
-    if: always() && needs.start-runner.result == 'success'
+    if: always() && needs.start-runner.result == 'success' && needs.start-runner.outputs.use_self_hosted == 'true'
     runs-on: ubuntu-latest
     permissions:
       id-token: write
