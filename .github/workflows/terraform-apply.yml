@@ -76,11 +76,22 @@ jobs:
       - name: Ensure Node.js for GitHub Actions
         if: needs.start-runner.outputs.use_self_hosted == 'true'
         run: |
-          if ! command -v node >/dev/null 2>&1; then
-            sudo apt-get update
+          if ! node --version 2>/dev/null | grep -qE '^v2[0-9]'; then
+            curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
             sudo apt-get install -y nodejs
           fi
           node --version
+
+      - name: Ensure Terraform CLI
+        if: needs.start-runner.outputs.use_self_hosted == 'true'
+        run: |
+          if ! terraform version 2>/dev/null | grep -q '1.16.'; then
+            sudo apt-get install -y unzip
+            curl -fsSL https://releases.hashicorp.com/terraform/1.16.0/terraform_1.16.0_linux_amd64.zip -o /tmp/terraform.zip
+            sudo unzip -o /tmp/terraform.zip -d /usr/local/bin
+            rm -f /tmp/terraform.zip
+          fi
+          terraform version
 
       - name: Validate Azure secrets are configured
         run: |
@@ -108,6 +119,7 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - uses: hashicorp/setup-terraform@v3
+        if: needs.start-runner.outputs.use_self_hosted != 'true'
         with:
           terraform_version: 1.16.0
 

@@ -7,7 +7,6 @@ packages:
   - gnupg
   - jq
   - lsb-release
-  - nodejs
   - unzip
 
 write_files:
