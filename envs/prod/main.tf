@@ -75,7 +75,6 @@ module "ci_runner" {
   subnet_id            = module.network.ci_runner_subnet_id
   admin_ssh_public_key = var.ci_runner_ssh_public_key
   vm_size              = var.ci_runner_vm_size
-  vm_zone              = var.ci_runner_vm_zone
   runner_labels        = var.ci_runner_labels
   tags                 = var.tags
 }

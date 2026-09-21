@@ -26,13 +26,7 @@ variable "admin_ssh_public_key" {
 
 variable "vm_size" {
   type    = string
-  default = "Standard_D2as_v4"
-}
-
-variable "vm_zone" {
-  type        = string
-  description = "Availability zone for the runner VM (helps when a region has zonal capacity limits)."
-  default     = "2"
+  default = "Standard_D2ls_v6"
 }
 
 variable "runner_labels" {
