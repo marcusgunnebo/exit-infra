@@ -68,7 +68,7 @@ variable "ci_runner_ssh_public_key" {
 
 variable "ci_runner_vm_size" {
   type    = string
-  default = "Standard_B1s"
+  default = "Standard_D2as_v5"
 }
 
 variable "ci_runner_labels" {
