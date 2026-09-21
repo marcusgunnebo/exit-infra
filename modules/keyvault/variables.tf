@@ -25,7 +25,7 @@ variable "keyvault_private_dns_zone_id" {
 variable "public_network_access_enabled" {
   type        = bool
   description = "Set false once the VNet CI runner can run Terraform against the private endpoint."
-  default     = true
+  default     = false
 }
 
 variable "database_url" {

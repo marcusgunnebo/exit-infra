@@ -57,8 +57,8 @@ variable "tags" {
 
 variable "key_vault_public_network_access_enabled" {
   type        = bool
-  description = "Set false after bootstrap/setup-github-runner.sh and a successful self-hosted workflow run."
-  default     = true
+  description = "False for production (private endpoint only). CI sets true only for GitHub-hosted bootstrap when the runner VM is missing."
+  default     = false
 }
 
 variable "ci_runner_ssh_public_key" {

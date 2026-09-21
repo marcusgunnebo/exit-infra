@@ -144,6 +144,7 @@ jobs:
           TF_VAR_shopify_api_secret: ${{ secrets.SHOPIFY_API_SECRET }}
           TF_VAR_shopify_app_url: ${{ vars.SHOPIFY_APP_URL }}
           TF_VAR_ci_runner_ssh_public_key: ${{ secrets.CI_RUNNER_SSH_PUBLIC_KEY }}
+          TF_VAR_key_vault_public_network_access_enabled: ${{ needs.start-runner.outputs.use_self_hosted == 'true' && 'false' || 'true' }}
         run: |
           terraform apply -auto-approve
           terraform apply -auto-approve

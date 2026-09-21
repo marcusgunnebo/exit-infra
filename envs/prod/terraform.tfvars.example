@@ -9,5 +9,5 @@ shopify_api_secret = "replace-me"
 # SSH public key for the Terraform CI runner VM (required).
 ci_runner_ssh_public_key = "ssh-ed25519 AAAA... you@host"
 
-# After the self-hosted runner is registered, set to false (see bootstrap/GITHUB_SECRETS.md).
-key_vault_public_network_access_enabled = true
+# Default false (private Key Vault only). CI enables public access only for GitHub-hosted bootstrap.
+# key_vault_public_network_access_enabled = false

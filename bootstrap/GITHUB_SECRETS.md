@@ -35,7 +35,11 @@ Optional variable: `SHOPIFY_APP_URL` (set after first deploy)
 
 Terraform **plan** and **apply** run on a self-hosted runner in the VNet so Key Vault
 (private endpoint only) is reachable. A GitHub-hosted job starts the runner VM, waits
-for it to register, then deallocates the VM when the workflow finishes.
+for the runner service, then deallocates the VM when the workflow finishes.
+
+Key Vault **public network access is disabled** in normal CI. If the runner VM is
+missing, workflows fall back to GitHub-hosted runners and temporarily set
+`key_vault_public_network_access_enabled = true` for that apply only.
 
 ## exit-app — required secrets
 
@@ -70,25 +74,16 @@ export APP_REPO_ID=<exit-app-repo-id>
 The script scopes roles to `exit-prod` and `exit-tfstate` resource groups (not the
 full subscription) and creates federated credentials for `main` branch only.
 
-## Key Vault private access + CI runner bootstrap
+## CI runner VM (`exit-tf-runner`)
 
-1. Add `ci_runner_ssh_public_key` to `envs/prod/terraform.tfvars` (SSH public key for
-   break-glass access to the runner VM).
-2. Keep `key_vault_public_network_access_enabled = true` for the **first** apply
-   (from your laptop) so Terraform can still reach Key Vault while the private
-   endpoint and runner VM are created.
-3. Start the VM and register the runner:
+- SKU: **`Standard_D2ls_v6`** (same pattern as Kupe `vm-kupe-ci`).
+- Register or re-register the GitHub runner:
 
-   ```bash
-   export GITHUB_ORG=marcusgunnebo
-   ./bootstrap/setup-github-runner.sh
-   az vm deallocate -g exit-prod -n exit-tf-runner
-   ```
-
-4. Run **Terraform Plan** on a PR or **Terraform Apply** on `main` to confirm the
-   self-hosted job succeeds.
-5. Set `key_vault_public_network_access_enabled = false` in `terraform.tfvars` and
-   apply again via the workflow.
+  ```bash
+  export GITHUB_ORG=marcusgunnebo
+  ./bootstrap/setup-github-runner.sh
+  az vm deallocate -g exit-prod -n exit-tf-runner
+  ```
 
 ## Repos
 
