@@ -44,6 +44,20 @@ resource "azurerm_subnet" "aca" {
   }
 }
 
+resource "azurerm_subnet" "private_endpoints" {
+  name                 = "snet-pe"
+  resource_group_name  = var.resource_group_name
+  virtual_network_name = azurerm_virtual_network.this.name
+  address_prefixes     = [var.private_endpoint_subnet_prefix]
+}
+
+resource "azurerm_subnet" "ci_runner" {
+  name                 = "snet-ci-runner"
+  resource_group_name  = var.resource_group_name
+  virtual_network_name = azurerm_virtual_network.this.name
+  address_prefixes     = [var.ci_runner_subnet_prefix]
+}
+
 resource "azurerm_network_security_group" "postgres" {
   name                = "${var.name_prefix}-postgres-nsg"
   location            = var.location
@@ -70,6 +84,18 @@ resource "azurerm_subnet_network_security_group_association" "postgres" {
   network_security_group_id = azurerm_network_security_group.postgres.id
 }
 
+resource "azurerm_network_security_group" "ci_runner" {
+  name                = "${var.name_prefix}-ci-runner-nsg"
+  location            = var.location
+  resource_group_name = var.resource_group_name
+  tags                = var.tags
+}
+
+resource "azurerm_subnet_network_security_group_association" "ci_runner" {
+  subnet_id                 = azurerm_subnet.ci_runner.id
+  network_security_group_id = azurerm_network_security_group.ci_runner.id
+}
+
 resource "azurerm_private_dns_zone" "postgres" {
   name                = "privatelink.postgres.database.azure.com"
   resource_group_name = var.resource_group_name
@@ -80,6 +106,21 @@ resource "azurerm_private_dns_zone_virtual_network_link" "postgres" {
   name                  = "${var.name_prefix}-postgres-dns-link"
   resource_group_name   = var.resource_group_name
   private_dns_zone_name = azurerm_private_dns_zone.postgres.name
+  virtual_network_id    = azurerm_virtual_network.this.id
+  registration_enabled  = false
+  tags                  = var.tags
+}
+
+resource "azurerm_private_dns_zone" "keyvault" {
+  name                = "privatelink.vaultcore.azure.net"
+  resource_group_name = var.resource_group_name
+  tags                = var.tags
+}
+
+resource "azurerm_private_dns_zone_virtual_network_link" "keyvault" {
+  name                  = "${var.name_prefix}-keyvault-dns-link"
+  resource_group_name   = var.resource_group_name
+  private_dns_zone_name = azurerm_private_dns_zone.keyvault.name
   virtual_network_id    = azurerm_virtual_network.this.id
   registration_enabled  = false
   tags                  = var.tags

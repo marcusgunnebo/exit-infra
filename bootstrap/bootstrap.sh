@@ -13,7 +13,7 @@ echo "Using subscription: ${SUBSCRIPTION}"
 az account set --subscription "${SUBSCRIPTION}"
 
 echo "Registering required resource providers (new subscriptions need this)..."
-for PROVIDER in Microsoft.Storage Microsoft.Network Microsoft.KeyVault Microsoft.DBforPostgreSQL Microsoft.App Microsoft.ContainerRegistry Microsoft.OperationalInsights Microsoft.Insights; do
+for PROVIDER in Microsoft.Storage Microsoft.Network Microsoft.KeyVault Microsoft.DBforPostgreSQL Microsoft.App Microsoft.ContainerRegistry Microsoft.OperationalInsights Microsoft.Insights Microsoft.Compute; do
   STATE="$(az provider show -n "${PROVIDER}" --query registrationState -o tsv 2>/dev/null || echo Unknown)"
   if [ "${STATE}" != "Registered" ]; then
     echo "  Registering ${PROVIDER}..."

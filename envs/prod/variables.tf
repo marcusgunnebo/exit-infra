@@ -54,3 +54,25 @@ variable "tags" {
     managed_by  = "terraform"
   }
 }
+
+variable "key_vault_public_network_access_enabled" {
+  type        = bool
+  description = "Set false after bootstrap/setup-github-runner.sh and a successful self-hosted workflow run."
+  default     = true
+}
+
+variable "ci_runner_ssh_public_key" {
+  type        = string
+  description = "SSH public key for the Terraform CI runner VM (break-glass)."
+}
+
+variable "ci_runner_vm_size" {
+  type    = string
+  default = "Standard_B2s"
+}
+
+variable "ci_runner_labels" {
+  type        = list(string)
+  description = "GitHub Actions labels for the self-hosted Terraform runner."
+  default     = ["self-hosted", "exit-terraform"]
+}

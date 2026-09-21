@@ -25,6 +25,16 @@ variable "aca_subnet_prefix" {
   default = "10.0.2.0/23"
 }
 
+variable "private_endpoint_subnet_prefix" {
+  type    = string
+  default = "10.0.4.0/24"
+}
+
+variable "ci_runner_subnet_prefix" {
+  type    = string
+  default = "10.0.5.0/24"
+}
+
 variable "tags" {
   type    = map(string)
   default = {}

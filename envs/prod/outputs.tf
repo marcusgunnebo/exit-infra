@@ -25,3 +25,11 @@ output "container_app_name" {
 output "key_vault_name" {
   value = module.keyvault.id
 }
+
+output "tf_runner_vm_name" {
+  value = module.ci_runner.vm_name
+}
+
+output "tf_runner_labels" {
+  value = module.ci_runner.runner_labels
+}

@@ -14,6 +14,20 @@ variable "tenant_id" {
   type = string
 }
 
+variable "private_endpoint_subnet_id" {
+  type = string
+}
+
+variable "keyvault_private_dns_zone_id" {
+  type = string
+}
+
+variable "public_network_access_enabled" {
+  type        = bool
+  description = "Set false once the VNet CI runner can run Terraform against the private endpoint."
+  default     = true
+}
+
 variable "database_url" {
   type      = string
   sensitive = true

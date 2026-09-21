@@ -25,8 +25,11 @@ See [bootstrap/GITHUB_SECRETS.md](bootstrap/GITHUB_SECRETS.md) for CI secrets.
 
 ## CI/CD
 
-- **PR**: `terraform plan`
+- **PR**: `terraform plan` (self-hosted runner in VNet; VM started/stopped by workflow)
 - **main**: `terraform apply` + sync outputs to `exit-app` repo variables
+
+Key Vault is private (private endpoint only). See
+[bootstrap/GITHUB_SECRETS.md](bootstrap/GITHUB_SECRETS.md) for runner bootstrap.
 
 ## App repo
 
