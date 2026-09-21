@@ -26,6 +26,7 @@ resource "azurerm_linux_virtual_machine" "this" {
   location                        = var.location
   resource_group_name             = var.resource_group_name
   size                            = var.vm_size
+  zone                            = var.vm_zone
   admin_username                  = var.admin_username
   disable_password_authentication = true
   tags                            = merge(var.tags, { role = "github-actions-runner" })
