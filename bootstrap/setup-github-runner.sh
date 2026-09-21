@@ -36,8 +36,10 @@ LABELS="$(az vm run-command invoke \
   --command-id RunShellScript \
   --scripts "cat /etc/exit-runner-labels 2>/dev/null || echo self-hosted,exit-terraform" \
   --query 'value[0].message' -o tsv | tr -d '\r' | tail -n 1)"
+LABELS="${LABELS:-self-hosted,exit-terraform}"
 
 INSTALL_SCRIPT="$(cat <<EOF
+#!/bin/bash
 set -euo pipefail
 RUNNER_USER="${RUNNER_USER}"
 RUNNER_DIR="${RUNNER_DIR}"
@@ -53,23 +55,26 @@ if [ -f "\${RUNNER_DIR}/.runner" ] && systemctl is-active --quiet actions.runner
 fi
 
 sudo mkdir -p "\${RUNNER_DIR}"
-sudo chown "\${RUNNER_USER}:\${RUNNER_USER}" "\${RUNNER_DIR}"
-cd "\${RUNNER_DIR}"
+sudo chown -R "\${RUNNER_USER}:\${RUNNER_USER}" "\${RUNNER_DIR}"
 
+sudo -u "\${RUNNER_USER}" bash -s <<'RUNNER_BOOT'
+set -euo pipefail
+cd "${RUNNER_DIR}"
 if [ ! -f ./config.sh ]; then
-  curl -fsSL -o actions-runner.tar.gz \\
-    "https://github.com/actions/runner/releases/download/v\${RUNNER_VERSION}/actions-runner-linux-x64-\${RUNNER_VERSION}.tar.gz"
+  curl -fsSL -o actions-runner.tar.gz \
+    "https://github.com/actions/runner/releases/download/v${RUNNER_VERSION}/actions-runner-linux-x64-${RUNNER_VERSION}.tar.gz"
   tar xzf actions-runner.tar.gz
   rm -f actions-runner.tar.gz
 fi
-
-sudo -u "\${RUNNER_USER}" ./config.sh \\
-  --url "https://github.com/\${GITHUB_ORG}/\${GITHUB_REPO}" \\
-  --token "\${REG_TOKEN}" \\
-  --labels "\${LABELS}" \\
-  --unattended \\
+./config.sh \
+  --url "https://github.com/${GITHUB_ORG}/${GITHUB_REPO}" \
+  --token "${REG_TOKEN}" \
+  --labels "${LABELS}" \
+  --unattended \
   --replace
+RUNNER_BOOT
 
+cd "\${RUNNER_DIR}"
 ./svc.sh install "\${RUNNER_USER}"
 ./svc.sh start
 EOF
