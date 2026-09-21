@@ -67,6 +67,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Ensure Node.js for GitHub Actions
+        if: needs.start-runner.outputs.use_self_hosted == 'true'
+        run: |
+          if ! command -v node >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y nodejs
+          fi
+          node --version
+
       - name: Validate Azure secrets are configured
         run: |
           for VAR in AZURE_CLIENT_ID AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID TF_STATE_RESOURCE_GROUP TF_STATE_STORAGE_ACCOUNT TF_STATE_CONTAINER SHOPIFY_API_KEY SHOPIFY_API_SECRET CI_RUNNER_SSH_PUBLIC_KEY; do
