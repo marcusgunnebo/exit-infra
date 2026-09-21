@@ -26,7 +26,7 @@ variable "admin_ssh_public_key" {
 
 variable "vm_size" {
   type    = string
-  default = "Standard_B2s"
+  default = "Standard_B1s"
 }
 
 variable "runner_labels" {
