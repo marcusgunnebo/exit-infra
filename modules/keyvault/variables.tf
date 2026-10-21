@@ -49,7 +49,12 @@ variable "shopify_app_url" {
 
 variable "scopes" {
   type    = string
-  default = "read_orders,read_customers,write_orders"
+  default = "read_orders,read_customers"
+
+  validation {
+    condition     = !can(regex("(^|,)\\s*write_", var.scopes))
+    error_message = "Production scopes must be read-only; the app refuses to boot with write_* scopes."
+  }
 }
 
 variable "tags" {

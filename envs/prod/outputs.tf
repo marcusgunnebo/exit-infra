@@ -23,7 +23,7 @@ output "container_app_name" {
 }
 
 output "key_vault_name" {
-  value = module.keyvault.id
+  value = module.keyvault.name
 }
 
 output "tf_runner_vm_name" {

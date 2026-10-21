@@ -40,7 +40,12 @@ variable "storage_mb" {
 
 variable "backup_retention_days" {
   type    = number
-  default = 7
+  default = 14
+
+  validation {
+    condition     = var.backup_retention_days >= 7 && var.backup_retention_days <= 35
+    error_message = "Azure PostgreSQL Flexible Server supports 7-35 days of backup retention."
+  }
 }
 
 variable "tags" {

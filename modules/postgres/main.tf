@@ -22,6 +22,24 @@ resource "azurerm_postgresql_flexible_server" "this" {
   backup_retention_days = var.backup_retention_days
 
   tags = var.tags
+
+  lifecycle {
+    prevent_destroy = true
+    # Azure may move the server to another zone during maintenance or failover.
+    ignore_changes = [zone]
+  }
+}
+
+resource "azurerm_postgresql_flexible_server_configuration" "hardening" {
+  for_each = {
+    "log_connections"            = "on"
+    "log_checkpoints"            = "on"
+    "connection_throttle.enable" = "on"
+  }
+
+  server_id = azurerm_postgresql_flexible_server.this.id
+  name      = each.key
+  value     = each.value
 }
 
 resource "azurerm_postgresql_flexible_server_database" "this" {

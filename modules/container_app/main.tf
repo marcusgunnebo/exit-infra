@@ -83,9 +83,10 @@ resource "azurerm_container_app" "this" {
   }
 
   ingress {
-    external_enabled = true
-    target_port      = 3000
-    transport        = "auto"
+    external_enabled           = true
+    allow_insecure_connections = false
+    target_port                = var.target_port
+    transport                  = "auto"
 
     traffic_weight {
       percentage      = 100
@@ -131,6 +132,31 @@ resource "azurerm_container_app" "this" {
       env {
         name  = "NODE_ENV"
         value = "production"
+      }
+
+      # Startup allows time for `prisma migrate deploy` before the server listens.
+      startup_probe {
+        transport               = "HTTP"
+        port                    = var.target_port
+        path                    = var.health_path
+        interval_seconds        = 5
+        failure_count_threshold = 30
+      }
+
+      liveness_probe {
+        transport               = "HTTP"
+        port                    = var.target_port
+        path                    = var.health_path
+        interval_seconds        = 30
+        failure_count_threshold = 3
+      }
+
+      readiness_probe {
+        transport               = "HTTP"
+        port                    = var.target_port
+        path                    = var.health_path
+        interval_seconds        = 10
+        failure_count_threshold = 3
       }
     }
   }

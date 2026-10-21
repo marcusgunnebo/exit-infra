@@ -38,6 +38,17 @@ variable "key_vault_secret_ids" {
   type = map(string)
 }
 
+variable "target_port" {
+  type    = number
+  default = 3000
+}
+
+variable "health_path" {
+  type        = string
+  description = "Unauthenticated HTTP endpoint used by startup, liveness and readiness probes."
+  default     = "/health"
+}
+
 variable "min_replicas" {
   type    = number
   default = 1

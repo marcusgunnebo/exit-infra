@@ -11,6 +11,15 @@ resource "azurerm_key_vault" "this" {
   rbac_authorization_enabled    = true
   public_network_access_enabled = var.public_network_access_enabled
   tags                          = var.tags
+
+  network_acls {
+    bypass         = "AzureServices"
+    default_action = var.public_network_access_enabled ? "Allow" : "Deny"
+  }
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "azurerm_private_endpoint" "this" {
