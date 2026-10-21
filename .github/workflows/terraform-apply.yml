@@ -10,19 +10,30 @@ on:
       - ".github/workflows/terraform-apply.yml"
       - ".github/scripts/**"
   workflow_dispatch:
+    inputs:
+      allow_public_key_vault_bootstrap:
+        description: "Runner VM missing: temporarily allow Key Vault public access for a GitHub-hosted bootstrap apply"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
 
 concurrency:
   group: terraform-prod
   cancel-in-progress: false
 
-permissions:
-  id-token: write
-  contents: read
+defaults:
+  run:
+    shell: bash
 
 env:
+  TF_VERSION: 1.16.0
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
   TF_WORKING_DIR: envs/prod
   APP_REPO: marcusgunnebo/exit-app
-  ARM_USE_OIDC: true
+  ARM_USE_OIDC: "true"
   ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
   ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
   ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
@@ -33,17 +44,19 @@ env:
 jobs:
   start-runner:
     runs-on: ubuntu-latest
-    outputs:
-      runs_on: ${{ steps.runner.outputs.runs_on }}
-      use_self_hosted: ${{ steps.runner.outputs.use_self_hosted }}
+    timeout-minutes: 20
     permissions:
       id-token: write
       contents: read
-      actions: read
+    outputs:
+      runs_on: ${{ steps.runner.outputs.runs_on }}
+      use_self_hosted: ${{ steps.runner.outputs.use_self_hosted }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - uses: azure/login@v2
+      - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -53,91 +66,113 @@ jobs:
         id: runner
         env:
           GH_TOKEN: ${{ github.token }}
+          ALLOW_PUBLIC_KV_BOOTSTRAP: ${{ inputs.allow_public_key_vault_bootstrap || false }}
         run: |
           if az vm show --resource-group "${RESOURCE_GROUP}" --name "${TF_RUNNER_VM_NAME}" >/dev/null 2>&1; then
             echo "use_self_hosted=true" >> "$GITHUB_OUTPUT"
-            echo 'runs_on=["self-hosted","exit-terraform"]' >> "$GITHUB_OUTPUT"
+            echo "runs_on=[\"self-hosted\",\"${TF_RUNNER_LABEL}\"]" >> "$GITHUB_OUTPUT"
             bash .github/scripts/terraform-runner-vm.sh start
-          else
-            echo "Runner VM not found — bootstrap apply on GitHub-hosted (Key Vault public access must stay enabled)."
+          elif [ "${ALLOW_PUBLIC_KV_BOOTSTRAP}" = "true" ]; then
+            echo "::warning::Runner VM not found; bootstrap apply on GitHub-hosted with Key Vault public access enabled for this run."
             echo "use_self_hosted=false" >> "$GITHUB_OUTPUT"
             echo 'runs_on=["ubuntu-latest"]' >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::Runner VM ${TF_RUNNER_VM_NAME} not found. Re-run manually with allow_public_key_vault_bootstrap=true to bootstrap."
+            exit 1
           fi
 
-  apply:
+  plan:
     needs: start-runner
     runs-on: ${{ fromJSON(needs.start-runner.outputs.runs_on) }}
+    timeout-minutes: 30
     permissions:
       id-token: write
       contents: read
+    env:
+      TF_VAR_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      TF_VAR_shopify_api_key: ${{ secrets.SHOPIFY_API_KEY }}
+      TF_VAR_shopify_api_secret: ${{ secrets.SHOPIFY_API_SECRET }}
+      TF_VAR_shopify_app_url: ${{ vars.SHOPIFY_APP_URL }}
+      TF_VAR_ci_runner_ssh_public_key: ${{ secrets.CI_RUNNER_SSH_PUBLIC_KEY }}
+      TF_VAR_key_vault_public_network_access_enabled: ${{ needs.start-runner.outputs.use_self_hosted == 'true' && 'false' || 'true' }}
     steps:
-      - uses: actions/checkout@v4
+      - &checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - name: Ensure Node.js for GitHub Actions
-        if: needs.start-runner.outputs.use_self_hosted == 'true'
-        run: |
-          if ! node --version 2>/dev/null | grep -qE '^v2[0-9]'; then
-            curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-            sudo apt-get install -y nodejs
-          fi
-          node --version
-
-      - name: Ensure Terraform CLI
-        if: needs.start-runner.outputs.use_self_hosted == 'true'
-        run: |
-          if ! terraform version 2>/dev/null | grep -q '1.16.'; then
-            sudo apt-get install -y unzip
-            curl -fsSL https://releases.hashicorp.com/terraform/1.16.0/terraform_1.16.0_linux_amd64.zip -o /tmp/terraform.zip
-            sudo unzip -o /tmp/terraform.zip -d /usr/local/bin
-            rm -f /tmp/terraform.zip
-          fi
-          terraform version
-
-      - name: Validate Azure secrets are configured
-        run: |
-          for VAR in AZURE_CLIENT_ID AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID TF_STATE_RESOURCE_GROUP TF_STATE_STORAGE_ACCOUNT TF_STATE_CONTAINER SHOPIFY_API_KEY SHOPIFY_API_SECRET CI_RUNNER_SSH_PUBLIC_KEY; do
-            if [ -z "${!VAR:-}" ]; then
-              echo "::error::Missing secret: ${VAR}"
-              exit 1
-            fi
-          done
+      - &validate-secrets
+        name: Validate secrets are configured
         env:
-          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           TF_STATE_RESOURCE_GROUP: ${{ secrets.TF_STATE_RESOURCE_GROUP }}
           TF_STATE_STORAGE_ACCOUNT: ${{ secrets.TF_STATE_STORAGE_ACCOUNT }}
           TF_STATE_CONTAINER: ${{ secrets.TF_STATE_CONTAINER }}
-          SHOPIFY_API_KEY: ${{ secrets.SHOPIFY_API_KEY }}
-          SHOPIFY_API_SECRET: ${{ secrets.SHOPIFY_API_SECRET }}
-          CI_RUNNER_SSH_PUBLIC_KEY: ${{ secrets.CI_RUNNER_SSH_PUBLIC_KEY }}
+        run: |
+          missing=0
+          for VAR in ARM_CLIENT_ID ARM_TENANT_ID ARM_SUBSCRIPTION_ID TF_STATE_RESOURCE_GROUP TF_STATE_STORAGE_ACCOUNT TF_STATE_CONTAINER TF_VAR_shopify_api_key TF_VAR_shopify_api_secret TF_VAR_ci_runner_ssh_public_key; do
+            if [ -z "${!VAR:-}" ]; then echo "::error::Missing secret for ${VAR}"; missing=1; fi
+          done
+          exit "${missing}"
 
-      - uses: azure/login@v2
+      - &azure-login
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - uses: hashicorp/setup-terraform@v3
-        if: needs.start-runner.outputs.use_self_hosted != 'true'
+      - &setup-terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
         with:
-          terraform_version: 1.16.0
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
 
-      - name: Terraform Init
+      - &terraform-init
+        name: Terraform Init
         working-directory: ${{ env.TF_WORKING_DIR }}
+        env:
+          TF_STATE_RESOURCE_GROUP: ${{ secrets.TF_STATE_RESOURCE_GROUP }}
+          TF_STATE_STORAGE_ACCOUNT: ${{ secrets.TF_STATE_STORAGE_ACCOUNT }}
+          TF_STATE_CONTAINER: ${{ secrets.TF_STATE_CONTAINER }}
         run: |
-          terraform init \
-            -backend-config="resource_group_name=${{ secrets.TF_STATE_RESOURCE_GROUP }}" \
-            -backend-config="storage_account_name=${{ secrets.TF_STATE_STORAGE_ACCOUNT }}" \
-            -backend-config="container_name=${{ secrets.TF_STATE_CONTAINER }}" \
-            -backend-config="subscription_id=${{ secrets.AZURE_SUBSCRIPTION_ID }}"
+          terraform init -lockfile=readonly \
+            -backend-config="resource_group_name=${TF_STATE_RESOURCE_GROUP}" \
+            -backend-config="storage_account_name=${TF_STATE_STORAGE_ACCOUNT}" \
+            -backend-config="container_name=${TF_STATE_CONTAINER}" \
+            -backend-config="subscription_id=${ARM_SUBSCRIPTION_ID}"
+
+      - name: Terraform Plan (for review before approving apply)
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform plan -no-color -lock-timeout=5m
+
+  apply:
+    needs: [start-runner, plan]
+    runs-on: ${{ fromJSON(needs.start-runner.outputs.runs_on) }}
+    timeout-minutes: 60
+    # Configure required reviewers on this environment (Settings → Environments).
+    environment: production
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      TF_VAR_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      TF_VAR_shopify_api_key: ${{ secrets.SHOPIFY_API_KEY }}
+      TF_VAR_shopify_api_secret: ${{ secrets.SHOPIFY_API_SECRET }}
+      TF_VAR_shopify_app_url: ${{ vars.SHOPIFY_APP_URL }}
+      TF_VAR_ci_runner_ssh_public_key: ${{ secrets.CI_RUNNER_SSH_PUBLIC_KEY }}
+      TF_VAR_key_vault_public_network_access_enabled: ${{ needs.start-runner.outputs.use_self_hosted == 'true' && 'false' || 'true' }}
+    steps:
+      - *checkout
+      - *validate-secrets
+      - *azure-login
+      - *setup-terraform
+      - *terraform-init
 
       - name: Reconcile orphaned Container App
         if: github.event_name == 'workflow_dispatch'
         working-directory: ${{ env.TF_WORKING_DIR }}
         env:
           CONTAINER_APP_NAME: ${{ vars.CONTAINER_APP_NAME || 'exit-app' }}
-          RESOURCE_GROUP: ${{ vars.RESOURCE_GROUP || 'exit-prod' }}
         run: |
           if terraform state show 'module.container_app.azurerm_container_app.this' >/dev/null 2>&1; then
             echo "Container App already in Terraform state"
@@ -153,66 +188,87 @@ jobs:
             az containerapp delete --name "${CONTAINER_APP_NAME}" --resource-group "${RESOURCE_GROUP}" --yes
             exit 0
           fi
-          APP_ID="/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${RESOURCE_GROUP}/providers/Microsoft.App/containerApps/${CONTAINER_APP_NAME}"
+          APP_ID="/subscriptions/${ARM_SUBSCRIPTION_ID}/resourceGroups/${RESOURCE_GROUP}/providers/Microsoft.App/containerApps/${CONTAINER_APP_NAME}"
           echo "Importing existing Container App into Terraform state"
           terraform import 'module.container_app.azurerm_container_app.this' "$APP_ID"
 
       - name: Terraform Apply
         working-directory: ${{ env.TF_WORKING_DIR }}
-        env:
-          TF_VAR_subscription_id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          TF_VAR_shopify_api_key: ${{ secrets.SHOPIFY_API_KEY }}
-          TF_VAR_shopify_api_secret: ${{ secrets.SHOPIFY_API_SECRET }}
-          TF_VAR_shopify_app_url: ${{ vars.SHOPIFY_APP_URL }}
-          TF_VAR_ci_runner_ssh_public_key: ${{ secrets.CI_RUNNER_SSH_PUBLIC_KEY }}
-          TF_VAR_key_vault_public_network_access_enabled: ${{ needs.start-runner.outputs.use_self_hosted == 'true' && 'false' || 'true' }}
         run: |
-          terraform apply -auto-approve
-          terraform apply -auto-approve
+          terraform plan -no-color -lock-timeout=5m -out=tfplan
+          terraform apply -lock-timeout=5m tfplan
+
+          # Some Azure changes (RBAC propagation, Key Vault references) only
+          # converge on a second pass; apply it explicitly and visibly.
+          set +e
+          terraform plan -no-color -lock-timeout=5m -detailed-exitcode -out=tfplan
+          status=$?
+          set -e
+          if [ "${status}" -eq 2 ]; then
+            echo "::warning::Infrastructure had not converged after the first apply; applying the follow-up plan."
+            terraform apply -lock-timeout=5m tfplan
+          elif [ "${status}" -ne 0 ]; then
+            exit "${status}"
+          fi
+          rm -f tfplan
 
       - name: Export outputs
         id: tf
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: |
-          echo "app_url=$(terraform output -raw container_app_url)" >> "$GITHUB_OUTPUT"
-          echo "acr_login_server=$(terraform output -raw acr_login_server)" >> "$GITHUB_OUTPUT"
-          echo "acr_name=$(terraform output -raw acr_name)" >> "$GITHUB_OUTPUT"
-          echo "container_app_name=$(terraform output -raw container_app_name)" >> "$GITHUB_OUTPUT"
-          echo "resource_group=$(terraform output -raw resource_group_name)" >> "$GITHUB_OUTPUT"
+          {
+            echo "app_url=$(terraform output -raw container_app_url)"
+            echo "acr_login_server=$(terraform output -raw acr_login_server)"
+            echo "acr_name=$(terraform output -raw acr_name)"
+            echo "container_app_name=$(terraform output -raw container_app_name)"
+            echo "resource_group=$(terraform output -raw resource_group_name)"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Sync deployment variables to exit-app
         env:
+          # Fine-grained PAT scoped to exit-app with "Variables: read and write" only.
           GH_TOKEN: ${{ secrets.APP_REPO_TOKEN }}
+          APP_URL: ${{ steps.tf.outputs.app_url }}
+          ACR_LOGIN_SERVER: ${{ steps.tf.outputs.acr_login_server }}
+          ACR_NAME: ${{ steps.tf.outputs.acr_name }}
+          CONTAINER_APP_NAME: ${{ steps.tf.outputs.container_app_name }}
+          TF_RESOURCE_GROUP: ${{ steps.tf.outputs.resource_group }}
         run: |
           if [ -z "${GH_TOKEN}" ]; then
-            echo "APP_REPO_TOKEN not set — skip syncing variables to exit-app"
+            echo "::notice::APP_REPO_TOKEN not set; skipping variable sync to ${APP_REPO}"
             exit 0
           fi
-          gh variable set SHOPIFY_APP_URL --repo "${{ env.APP_REPO }}" --body "${{ steps.tf.outputs.app_url }}"
-          gh variable set ACR_LOGIN_SERVER --repo "${{ env.APP_REPO }}" --body "${{ steps.tf.outputs.acr_login_server }}"
-          gh variable set ACR_NAME --repo "${{ env.APP_REPO }}" --body "${{ steps.tf.outputs.acr_name }}"
-          gh variable set CONTAINER_APP_NAME --repo "${{ env.APP_REPO }}" --body "${{ steps.tf.outputs.container_app_name }}"
-          gh variable set RESOURCE_GROUP --repo "${{ env.APP_REPO }}" --body "${{ steps.tf.outputs.resource_group }}"
+          gh variable set SHOPIFY_APP_URL --repo "${APP_REPO}" --body "${APP_URL}"
+          gh variable set ACR_LOGIN_SERVER --repo "${APP_REPO}" --body "${ACR_LOGIN_SERVER}"
+          gh variable set ACR_NAME --repo "${APP_REPO}" --body "${ACR_NAME}"
+          gh variable set CONTAINER_APP_NAME --repo "${APP_REPO}" --body "${CONTAINER_APP_NAME}"
+          gh variable set RESOURCE_GROUP --repo "${APP_REPO}" --body "${TF_RESOURCE_GROUP}"
 
       - name: Summary
+        env:
+          APP_URL: ${{ steps.tf.outputs.app_url }}
+          ACR_LOGIN_SERVER: ${{ steps.tf.outputs.acr_login_server }}
         run: |
-          echo "Container App URL: ${{ steps.tf.outputs.app_url }}"
-          echo "ACR: ${{ steps.tf.outputs.acr_login_server }}"
-          echo "Synced outputs to ${{ env.APP_REPO }} (requires APP_REPO_TOKEN secret)"
+          {
+            echo "### Terraform apply complete"
+            echo "- Container App URL: ${APP_URL}"
+            echo "- ACR: ${ACR_LOGIN_SERVER}"
+          } >> "$GITHUB_STEP_SUMMARY"
 
   stop-runner:
-    needs:
-      - start-runner
-      - apply
+    needs: [start-runner, plan, apply]
     if: always() && needs.start-runner.result == 'success' && needs.start-runner.outputs.use_self_hosted == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       id-token: write
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - uses: azure/login@v2
+      - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}

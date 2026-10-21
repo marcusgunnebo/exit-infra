@@ -89,6 +89,8 @@ ensure_federated_credential() {
 # Main branch only — avoids granting deploy privileges to PR workflows.
 ensure_federated_credential "${INFRA_REPO}-main" "repo:${GITHUB_ORG}@${GITHUB_ACTOR_ID}/${INFRA_REPO}@${INFRA_REPO_ID}:ref:refs/heads/main"
 ensure_federated_credential "${APP_REPO}-main" "repo:${GITHUB_ORG}@${GITHUB_ACTOR_ID}/${APP_REPO}@${APP_REPO_ID}:ref:refs/heads/main"
+# The apply job runs in the "production" environment (required reviewers), which changes its OIDC subject.
+ensure_federated_credential "${INFRA_REPO}-production" "repo:${GITHUB_ORG}@${GITHUB_ACTOR_ID}/${INFRA_REPO}@${INFRA_REPO_ID}:environment:production"
 
 remove_federated_credential_by_subject() {
   local SUBJECT="$1"
@@ -105,6 +107,8 @@ remove_federated_credential_by_subject() {
 for SUBJECT in \
   "repo:${GITHUB_ORG}@${GITHUB_ACTOR_ID}/${INFRA_REPO}@${INFRA_REPO_ID}:pull_request" \
   "repo:${GITHUB_ORG}@${GITHUB_ACTOR_ID}/${APP_REPO}@${APP_REPO_ID}:pull_request" \
+  "repo:${GITHUB_ORG}/${INFRA_REPO}@${INFRA_REPO_ID}:pull_request" \
+  "repo:${GITHUB_ORG}/${INFRA_REPO}@${INFRA_REPO_ID}:ref:refs/heads/main" \
   "repo:${GITHUB_ORG}/${INFRA_REPO}:ref:refs/heads/main" \
   "repo:${GITHUB_ORG}/${INFRA_REPO}:pull_request" \
   "repo:${GITHUB_ORG}/${APP_REPO}:ref:refs/heads/main" \
@@ -132,7 +136,6 @@ echo "  SHOPIFY_API_SECRET=<from Partner Dashboard>"
 echo "  APP_REPO_TOKEN=<optional PAT to sync variables to exit-app>"
 echo ""
 echo "exit-app only:"
-echo "  SHOPIFY_API_KEY=<from Partner Dashboard>"
 echo "  SHOPIFY_APP_AUTOMATION_TOKEN=<from Dev Dashboard>"
 echo ""
 echo "exit-app variables (set manually or by exit-infra apply via APP_REPO_TOKEN):"

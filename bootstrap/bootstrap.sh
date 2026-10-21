@@ -32,6 +32,17 @@ az storage account create \
   --min-tls-version TLS1_2 \
   --allow-blob-public-access false \
   --https-only true \
+  --allow-shared-key-access false \
+  -o none
+
+# The backend uses Entra ID auth (use_azuread_auth); re-running this hardens existing accounts too.
+az storage account update \
+  -n "${STORAGE}" \
+  -g "${RG}" \
+  --min-tls-version TLS1_2 \
+  --allow-blob-public-access false \
+  --https-only true \
+  --allow-shared-key-access false \
   -o none
 
 az storage account blob-service-properties update \
@@ -39,6 +50,8 @@ az storage account blob-service-properties update \
   --enable-versioning true \
   --enable-delete-retention true \
   --delete-retention-days 30 \
+  --enable-container-delete-retention true \
+  --container-delete-retention-days 30 \
   -o none
 
 az storage container create \

@@ -38,8 +38,20 @@ Terraform **plan** and **apply** run on a self-hosted runner in the VNet so Key 
 for the runner service, then deallocates the VM when the workflow finishes.
 
 Key Vault **public network access is disabled** in normal CI. If the runner VM is
-missing, workflows fall back to GitHub-hosted runners and temporarily set
-`key_vault_public_network_access_enabled = true` for that apply only.
+missing, the apply workflow fails. To bootstrap from scratch, run it manually with
+`allow_public_key_vault_bootstrap` checked: it then uses GitHub-hosted runners and
+temporarily sets `key_vault_public_network_access_enabled = true` for that apply only.
+
+### exit-infra — `production` environment
+
+The apply job runs in the `production` GitHub environment. Create it under
+**Settings → Environments** with required reviewers so every apply needs approval.
+Its OIDC subject is `…:environment:production`; `setup-github-oidc.sh` creates the
+matching federated credential (re-run the script before the first apply).
+
+Because the runner is self-hosted, keep `exit-infra` private, or require approval for
+all fork PR workflows (**Settings → Actions → General**). PR checks only run on
+GitHub-hosted runners, but the approval setting protects against workflow edits in PRs.
 
 ## exit-app — required secrets
 
@@ -48,7 +60,6 @@ missing, workflows fall back to GitHub-hosted runners and temporarily set
 | `AZURE_CLIENT_ID` | Same OIDC app as exit-infra |
 | `AZURE_TENANT_ID` | Azure AD tenant ID |
 | `AZURE_SUBSCRIPTION_ID` | Azure subscription ID |
-| `SHOPIFY_API_KEY` | Partner Dashboard client ID |
 | `SHOPIFY_APP_AUTOMATION_TOKEN` | Dev Dashboard → app → Settings → App Automation Token |
 
 ### Variables (set by infra apply or manually)
@@ -72,7 +83,8 @@ export APP_REPO_ID=<exit-app-repo-id>
 ```
 
 The script scopes roles to `exit-prod` and `exit-tfstate` resource groups (not the
-full subscription) and creates federated credentials for `main` branch only.
+full subscription) and creates federated credentials for the `main` branch and the
+`exit-infra` `production` environment only.
 
 ## CI runner VM (`exit-tf-runner`)
 

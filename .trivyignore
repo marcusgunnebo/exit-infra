@@ -1,0 +1,6 @@
+# CI runner VM: inbound traffic is denied by the snet-ci-runner NSG (subnet
+# level). The public IP only provides outbound internet access for the GitHub
+# runner, since Azure no longer grants default outbound access to new VNets.
+# Replace with a NAT gateway to drop both exceptions.
+AVD-AZU-0068
+AVD-AZU-0076
