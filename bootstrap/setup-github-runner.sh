@@ -37,6 +37,17 @@ LABELS="$(az vm run-command invoke \
   --scripts "cat /etc/exit-runner-labels 2>/dev/null || echo self-hosted,exit-terraform" \
   --query 'value[0].message' -o tsv | tr -d '\r' | tail -n 1)"
 LABELS="${LABELS:-self-hosted,exit-terraform}"
+RUNNER_LABEL="${LABELS##*,}"
+
+# GitHub deletes runners that stay offline for 14+ days, leaving a stale local registration on the VM.
+REGISTERED_COUNT="$(gh api "/repos/${GITHUB_ORG}/${GITHUB_REPO}/actions/runners" --paginate \
+  --jq "[.runners[] | select([.labels[].name] | index(\"${RUNNER_LABEL}\"))] | length")"
+if [ "${REGISTERED_COUNT}" -gt 0 ]; then
+  GITHUB_HAS_RUNNER=1
+else
+  GITHUB_HAS_RUNNER=0
+  echo "No runner with label ${RUNNER_LABEL} is registered on GitHub; re-registering."
+fi
 
 INSTALL_SCRIPT="$(cat <<EOF
 #!/bin/bash
@@ -48,14 +59,20 @@ REG_TOKEN="${REG_TOKEN}"
 LABELS="${LABELS}"
 GITHUB_ORG="${GITHUB_ORG}"
 GITHUB_REPO="${GITHUB_REPO}"
+GITHUB_HAS_RUNNER="${GITHUB_HAS_RUNNER}"
 
-if [ -f "\${RUNNER_DIR}/.runner" ] && systemctl is-active --quiet actions.runner.* 2>/dev/null; then
+if [ "\${GITHUB_HAS_RUNNER}" = "1" ] && [ -f "\${RUNNER_DIR}/.runner" ] && systemctl is-active --quiet 'actions.runner.*' 2>/dev/null; then
   echo "Runner already installed and active"
   exit 0
 fi
 
 sudo mkdir -p "\${RUNNER_DIR}"
 sudo chown -R "\${RUNNER_USER}:\${RUNNER_USER}" "\${RUNNER_DIR}"
+
+if [ -f "\${RUNNER_DIR}/.service" ]; then
+  (cd "\${RUNNER_DIR}" && ./svc.sh stop && ./svc.sh uninstall) || true
+fi
+rm -f "\${RUNNER_DIR}/.runner" "\${RUNNER_DIR}/.credentials" "\${RUNNER_DIR}/.credentials_rsaparams"
 
 sudo -u "\${RUNNER_USER}" bash -s <<'RUNNER_BOOT'
 set -euo pipefail
