@@ -49,7 +49,7 @@ variable "shopify_app_url" {
 
 variable "scopes" {
   type    = string
-  default = "read_orders,read_customers"
+  default = "read_orders,read_all_orders,read_customers,read_products"
 
   validation {
     condition     = !can(regex("(^|,)\\s*write_", var.scopes))

@@ -43,7 +43,7 @@ variable "container_image" {
 variable "scopes" {
   type        = string
   description = "Shopify API scopes in production (Key Vault). Local dev uses shopify.app.dev.toml."
-  default     = "read_orders,read_customers"
+  default     = "read_orders,read_all_orders,read_customers,read_products"
 }
 
 variable "tags" {
