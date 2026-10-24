@@ -103,12 +103,11 @@ resource "azurerm_private_dns_zone" "postgres" {
 }
 
 resource "azurerm_private_dns_zone_virtual_network_link" "postgres" {
-  name                  = "${var.name_prefix}-postgres-dns-link"
-  resource_group_name   = var.resource_group_name
-  private_dns_zone_name = azurerm_private_dns_zone.postgres.name
-  virtual_network_id    = azurerm_virtual_network.this.id
-  registration_enabled  = false
-  tags                  = var.tags
+  name                 = "${var.name_prefix}-postgres-dns-link"
+  private_dns_zone_id  = azurerm_private_dns_zone.postgres.id
+  virtual_network_id   = azurerm_virtual_network.this.id
+  registration_enabled = false
+  tags                 = var.tags
 }
 
 resource "azurerm_private_dns_zone" "keyvault" {
@@ -118,10 +117,9 @@ resource "azurerm_private_dns_zone" "keyvault" {
 }
 
 resource "azurerm_private_dns_zone_virtual_network_link" "keyvault" {
-  name                  = "${var.name_prefix}-keyvault-dns-link"
-  resource_group_name   = var.resource_group_name
-  private_dns_zone_name = azurerm_private_dns_zone.keyvault.name
-  virtual_network_id    = azurerm_virtual_network.this.id
-  registration_enabled  = false
-  tags                  = var.tags
+  name                 = "${var.name_prefix}-keyvault-dns-link"
+  private_dns_zone_id  = azurerm_private_dns_zone.keyvault.id
+  virtual_network_id   = azurerm_virtual_network.this.id
+  registration_enabled = false
+  tags                 = var.tags
 }
