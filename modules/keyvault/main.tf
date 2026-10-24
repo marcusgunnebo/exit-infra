@@ -81,6 +81,17 @@ resource "azurerm_key_vault_secret" "shopify_api_secret" {
   ]
 }
 
+resource "azurerm_key_vault_secret" "shopify_partner_api_token" {
+  name         = "shopify-partner-api-token"
+  value        = var.shopify_partner_api_token
+  key_vault_id = azurerm_key_vault.this.id
+
+  depends_on = [
+    azurerm_role_assignment.terraform_secrets_officer,
+    azurerm_private_endpoint.this,
+  ]
+}
+
 resource "azurerm_key_vault_secret" "shopify_app_url" {
   name         = "shopify-app-url"
   value        = var.shopify_app_url

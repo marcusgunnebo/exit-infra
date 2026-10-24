@@ -68,6 +68,12 @@ resource "azurerm_container_app" "this" {
   }
 
   secret {
+    name                = "shopify-partner-api-token"
+    key_vault_secret_id = var.key_vault_secret_ids.shopify_partner_api_token
+    identity            = azurerm_user_assigned_identity.aca.id
+  }
+
+  secret {
     name                = "scopes"
     key_vault_secret_id = var.key_vault_secret_ids.scopes
     identity            = azurerm_user_assigned_identity.aca.id
@@ -119,6 +125,11 @@ resource "azurerm_container_app" "this" {
       env {
         name        = "SHOPIFY_API_SECRET"
         secret_name = "shopify-api-secret"
+      }
+
+      env {
+        name        = "SHOPIFY_PARTNER_API_TOKEN"
+        secret_name = "shopify-partner-api-token"
       }
 
       env {

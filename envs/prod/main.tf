@@ -61,6 +61,7 @@ module "keyvault" {
   database_url                  = module.postgres.database_url
   shopify_api_key               = var.shopify_api_key
   shopify_api_secret            = var.shopify_api_secret
+  shopify_partner_api_token     = var.shopify_partner_api_token
   shopify_app_url               = local.shopify_app_url
   scopes                        = var.scopes
   tags                          = var.tags

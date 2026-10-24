@@ -28,6 +28,12 @@ variable "shopify_api_secret" {
   sensitive = true
 }
 
+variable "shopify_partner_api_token" {
+  type        = string
+  sensitive   = true
+  description = "Partner API client token (Manage apps) used to check Shopify App Pricing subscriptions."
+}
+
 variable "shopify_app_url" {
   type        = string
   description = "Public app URL. Leave empty on first apply; set to container app FQDN on second apply."
