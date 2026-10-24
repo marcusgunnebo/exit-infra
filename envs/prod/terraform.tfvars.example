@@ -5,6 +5,7 @@ location           = "swedencentral"
 name_prefix        = "exit"
 shopify_api_key    = "replace-me"
 shopify_api_secret = "replace-me"
+shopify_partner_api_token = "replace-me"
 
 # SSH public key for the Terraform CI runner VM (required).
 ci_runner_ssh_public_key = "ssh-ed25519 AAAA... you@host"
